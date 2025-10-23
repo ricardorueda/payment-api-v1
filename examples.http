@@ -1,0 +1,52 @@
+### Payments API - Exemplos de Requisições
+
+### 1. Criar um pagamento com PIX
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "amount": 150.75,
+  "paymentMethod": "PIX"
+}
+
+### 2. Criar um pagamento com Cartão de Crédito
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "amount": 299.90,
+  "paymentMethod": "CREDIT_CARD"
+}
+
+### 3. Criar um pagamento com Boleto
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "amount": 500.00,
+  "paymentMethod": "BOLETO"
+}
+
+### 4. Buscar pagamento por ID
+GET http://localhost:8080/api/v1/payments/1
+
+### 5. Listar todos os pagamentos
+GET http://localhost:8080/api/v1/payments
+
+### 6. Testar validação - Valor negativo (deve retornar erro 400)
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "amount": -50.00,
+  "paymentMethod": "PIX"
+}
+
+### 7. Testar validação - Método de pagamento não informado (deve retornar erro 400)
+POST http://localhost:8080/api/v1/payments
+Content-Type: application/json
+
+{
+  "amount": 100.00
+}
+
