@@ -39,6 +39,11 @@ public class PaymentPersistenceAdapter implements PaymentRepositoryPort {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end) {
+        return paymentJpaRepository.countByCreatedAtBetween(start, end);
+    }
+
     private PaymentEntity toEntity(Payment payment) {
         return new PaymentEntity(
                 payment.getId(),

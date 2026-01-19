@@ -1,6 +1,7 @@
 package com.payments.api.application.service;
 
 import com.payments.api.application.port.in.ProcessPaymentUseCase;
+import com.payments.api.application.port.in.ValidateTransactionLimitUseCase;
 import com.payments.api.application.port.out.PaymentRepositoryPort;
 import com.payments.api.domain.model.Payment;
 import com.payments.api.domain.valueobject.Money;
@@ -15,13 +16,19 @@ import java.util.Optional;
 public class PaymentService implements ProcessPaymentUseCase {
 
     private final PaymentRepositoryPort paymentRepositoryPort;
+    private final ValidateTransactionLimitUseCase limitValidator;
 
-    public PaymentService(PaymentRepositoryPort paymentRepositoryPort) {
+    public PaymentService(
+            PaymentRepositoryPort paymentRepositoryPort,
+            ValidateTransactionLimitUseCase limitValidator) {
         this.paymentRepositoryPort = paymentRepositoryPort;
+        this.limitValidator = limitValidator;
     }
 
     @Override
     public Payment processPayment(BigDecimal amount, PaymentMethod paymentMethod) {
+        limitValidator.validate(amount, paymentMethod);
+        
         Money money = new Money(amount);
         Payment payment = new Payment(money, paymentMethod);
         return paymentRepositoryPort.save(payment);

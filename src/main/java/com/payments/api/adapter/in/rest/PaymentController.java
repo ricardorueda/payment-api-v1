@@ -35,6 +35,8 @@ public class PaymentController {
         @ApiResponse(responseCode = "201", description = "Pagamento criado com sucesso",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaymentResponse.class))),
         @ApiResponse(responseCode = "400", description = "Dados inválidos fornecidos", content = @Content),
+        @ApiResponse(responseCode = "422", description = "Limite de valor mínimo ou máximo excedido", content = @Content),
+        @ApiResponse(responseCode = "429", description = "Limite diário de transações excedido", content = @Content),
         @ApiResponse(responseCode = "500", description = "Erro interno do servidor", content = @Content)
     })
     public ResponseEntity<PaymentResponse> processPayment(@Valid @RequestBody PaymentRequest request) {
