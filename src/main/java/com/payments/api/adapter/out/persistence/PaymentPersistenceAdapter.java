@@ -4,6 +4,7 @@ import com.payments.api.adapter.out.persistence.entity.PaymentEntity;
 import com.payments.api.application.port.out.PaymentRepositoryPort;
 import com.payments.api.domain.model.Payment;
 import com.payments.api.domain.valueobject.Money;
+import com.payments.api.domain.valueobject.PaymentMethod;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -42,6 +43,11 @@ public class PaymentPersistenceAdapter implements PaymentRepositoryPort {
     @Override
     public long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end) {
         return paymentJpaRepository.countByCreatedAtBetween(start, end);
+    }
+
+    @Override
+    public long countByCreatedAtBetweenAndPaymentMethod(java.time.LocalDateTime start, java.time.LocalDateTime end, PaymentMethod paymentMethod) {
+        return paymentJpaRepository.countByCreatedAtBetweenAndPaymentMethod(start, end, paymentMethod);
     }
 
     private PaymentEntity toEntity(Payment payment) {

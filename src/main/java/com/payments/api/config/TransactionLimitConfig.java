@@ -71,6 +71,7 @@ public class TransactionLimitConfig {
     public static class MethodLimits {
         private BigDecimal min;
         private BigDecimal max;
+        private Long maxTransactions;
 
         public BigDecimal getMin() {
             return min;
@@ -86,6 +87,14 @@ public class TransactionLimitConfig {
 
         public void setMax(BigDecimal max) {
             this.max = max;
+        }
+
+        public Long getMaxTransactions() {
+            return maxTransactions;
+        }
+
+        public void setMaxTransactions(Long maxTransactions) {
+            this.maxTransactions = maxTransactions;
         }
     }
 
