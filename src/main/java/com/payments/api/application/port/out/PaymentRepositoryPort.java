@@ -1,6 +1,7 @@
 package com.payments.api.application.port.out;
 
 import com.payments.api.domain.model.Payment;
+import com.payments.api.domain.valueobject.PaymentMethod;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,5 +16,7 @@ public interface PaymentRepositoryPort {
     List<Payment> findAll();
     
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+    
+    long countByCreatedAtBetweenAndPaymentMethod(LocalDateTime start, LocalDateTime end, PaymentMethod paymentMethod);
 }
 

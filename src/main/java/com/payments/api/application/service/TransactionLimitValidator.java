@@ -30,7 +30,7 @@ public class TransactionLimitValidator implements ValidateTransactionLimitUseCas
     @Override
     public void validate(BigDecimal amount, PaymentMethod paymentMethod) {
         validateAmountLimits(amount, paymentMethod);
-        validateDailyLimit();
+        validateDailyLimit(paymentMethod);
     }
 
     private void validateAmountLimits(BigDecimal amount, PaymentMethod paymentMethod) {
@@ -69,17 +69,28 @@ public class TransactionLimitValidator implements ValidateTransactionLimitUseCas
         }
     }
 
-    private void validateDailyLimit() {
+    private void validateDailyLimit(PaymentMethod paymentMethod) {
         LocalDate today = LocalDate.now();
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
-        
-        long currentDailyCount = paymentRepositoryPort.countByCreatedAtBetween(startOfDay, endOfDay);
-        long maxDailyTransactions = limitConfig.getDaily().getMaxTransactions();
-        
+
+        String methodKey = paymentMethod.name().toLowerCase();
+        TransactionLimitConfig.MethodLimits methodLimits = limitConfig.getMethodLimits(methodKey);
+
+        long currentDailyCount;
+        long maxDailyTransactions;
+
+        if (methodLimits != null && methodLimits.getMaxTransactions() != null) {
+            currentDailyCount = paymentRepositoryPort.countByCreatedAtBetweenAndPaymentMethod(startOfDay, endOfDay, paymentMethod);
+            maxDailyTransactions = methodLimits.getMaxTransactions();
+        } else {
+            currentDailyCount = paymentRepositoryPort.countByCreatedAtBetween(startOfDay, endOfDay);
+            maxDailyTransactions = limitConfig.getDaily().getMaxTransactions();
+        }
+
         if (currentDailyCount >= maxDailyTransactions) {
             throw new DailyLimitExceededException(
-                String.format("Limite diário de transações excedido. Limite: %d, Atual: %d", 
+                String.format("Limite diário de transações excedido. Limite: %d, Atual: %d",
                     maxDailyTransactions, currentDailyCount)
             );
         }
