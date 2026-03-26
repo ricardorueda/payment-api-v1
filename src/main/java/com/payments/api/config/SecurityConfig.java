@@ -2,6 +2,7 @@ package com.payments.api.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payments.api.adapter.in.rest.GlobalExceptionHandler;
+import com.payments.api.adapter.in.rest.security.AuditLoggingFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +36,11 @@ public class SecurityConfig {
     public SecurityConfig(JwtProperties jwtProperties, ObjectMapper objectMapper) {
         this.jwtProperties = jwtProperties;
         this.objectMapper = objectMapper;
+    }
+
+    @Bean
+    public AuditLoggingFilter auditLoggingFilter() {
+        return new AuditLoggingFilter(objectMapper);
     }
 
     @Bean
@@ -102,7 +109,8 @@ public class SecurityConfig {
                     );
                     objectMapper.writeValue(response.getWriter(), error);
                 })
-            );
+            )
+            .addFilterAfter(auditLoggingFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
