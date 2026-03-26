@@ -1,5 +1,8 @@
 package com.payments.api.application.service.security;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
@@ -9,16 +12,25 @@ import com.payments.api.config.JwtProperties;
 import com.payments.api.domain.exception.InvalidClientException;
 import com.payments.api.domain.security.model.OAuthClient;
 import com.payments.api.domain.security.valueobject.ClientScope;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -38,6 +50,8 @@ class AuthenticationServiceTest {
     private BCryptPasswordEncoder passwordEncoder;
 
     private AuthenticationService authenticationService;
+    private ListAppender<ILoggingEvent> listAppender;
+    private Logger auditLogger;
 
     private static final String TEST_SECRET =
         "test-secret-key-for-unit-tests-hmac-sha256-at-least-32-bytes-long";
@@ -67,6 +81,21 @@ class AuthenticationServiceTest {
             ClientScope.WRITE, true,
             LocalDateTime.now(), null
         );
+
+        auditLogger = (Logger) LoggerFactory.getLogger("AUDIT");
+        listAppender = new ListAppender<>();
+        listAppender.start();
+        auditLogger.addAppender(listAppender);
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.setRemoteAddr("127.0.0.1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(httpRequest));
+    }
+
+    @AfterEach
+    void tearDown() {
+        auditLogger.detachAppender(listAppender);
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -240,5 +269,97 @@ class AuthenticationServiceTest {
             () -> authenticationService.authenticate(CLIENT_ID, "wrong-secret"));
 
         verify(clientRepository, never()).updateLastUsedAt(any(), any());
+    }
+
+    @Test
+    void successfulAuthEmitsAuditSuccessEventWithAllRequiredFields() throws Exception {
+        when(clientRepository.findByClientId(CLIENT_ID)).thenReturn(Optional.of(activeClient));
+        when(passwordEncoder.matches(RAW_SECRET, HASHED_SECRET)).thenReturn(true);
+
+        authenticationService.authenticate(CLIENT_ID, RAW_SECRET);
+
+        assertThat(listAppender.list).hasSize(1);
+        Map<String, Object> event = new ObjectMapper().readValue(
+            listAppender.list.get(0).getFormattedMessage(), new TypeReference<Map<String, Object>>() {});
+
+        assertThat(event.get("type")).isEqualTo("AUTH");
+        assertThat(event.get("event")).isEqualTo("TOKEN_REQUEST");
+        assertThat(event.get("clientId")).isEqualTo(CLIENT_ID);
+        assertThat(event.get("clientName")).isEqualTo(CLIENT_NAME);
+        assertThat(event.get("scope")).isEqualTo(ClientScope.WRITE.toScopeString());
+        assertThat(event.get("outcome")).isEqualTo("SUCCESS");
+        assertThat(event.get("jti")).isNotNull().isInstanceOf(String.class);
+        assertThat(event).containsKey("sourceIp");
+        assertThat(event).containsKey("timestamp");
+    }
+
+    @Test
+    void unknownClientIdEmitsAuditFailureEventWithRequiredFields() throws Exception {
+        when(clientRepository.findByClientId("unknown-id")).thenReturn(Optional.empty());
+
+        assertThrows(InvalidClientException.class,
+            () -> authenticationService.authenticate("unknown-id", RAW_SECRET));
+
+        assertThat(listAppender.list).hasSize(1);
+        Map<String, Object> event = new ObjectMapper().readValue(
+            listAppender.list.get(0).getFormattedMessage(), new TypeReference<Map<String, Object>>() {});
+
+        assertThat(event.get("type")).isEqualTo("AUTH");
+        assertThat(event.get("clientId")).isEqualTo("unknown-id");
+        assertThat(event.get("outcome")).isEqualTo("FAILURE");
+        assertThat(event.get("reason")).isEqualTo("invalid_client");
+        assertThat(event).containsKey("sourceIp");
+        assertThat(event).containsKey("timestamp");
+    }
+
+    @Test
+    void wrongClientSecretEmitsAuditFailureEventWithRequiredFields() throws Exception {
+        when(clientRepository.findByClientId(CLIENT_ID)).thenReturn(Optional.of(activeClient));
+        when(passwordEncoder.matches("wrong-secret", HASHED_SECRET)).thenReturn(false);
+
+        assertThrows(InvalidClientException.class,
+            () -> authenticationService.authenticate(CLIENT_ID, "wrong-secret"));
+
+        assertThat(listAppender.list).hasSize(1);
+        Map<String, Object> event = new ObjectMapper().readValue(
+            listAppender.list.get(0).getFormattedMessage(), new TypeReference<Map<String, Object>>() {});
+
+        assertThat(event.get("outcome")).isEqualTo("FAILURE");
+        assertThat(event.get("reason")).isEqualTo("invalid_client");
+        assertThat(event.get("clientId")).isEqualTo(CLIENT_ID);
+    }
+
+    @Test
+    void inactiveClientEmitsAuditFailureEventWithRequiredFields() throws Exception {
+        OAuthClient inactiveClient = new OAuthClient(
+            CLIENT_ID, CLIENT_NAME, HASHED_SECRET,
+            ClientScope.READ, false,
+            LocalDateTime.now(), null
+        );
+        when(clientRepository.findByClientId(CLIENT_ID)).thenReturn(Optional.of(inactiveClient));
+
+        assertThrows(InvalidClientException.class,
+            () -> authenticationService.authenticate(CLIENT_ID, RAW_SECRET));
+
+        assertThat(listAppender.list).hasSize(1);
+        Map<String, Object> event = new ObjectMapper().readValue(
+            listAppender.list.get(0).getFormattedMessage(), new TypeReference<Map<String, Object>>() {});
+
+        assertThat(event.get("outcome")).isEqualTo("FAILURE");
+        assertThat(event.get("reason")).isEqualTo("invalid_client");
+        assertThat(event.get("clientId")).isEqualTo(CLIENT_ID);
+    }
+
+    @Test
+    void auditLogDoesNotContainRawOrHashedClientSecret() throws Exception {
+        when(clientRepository.findByClientId(CLIENT_ID)).thenReturn(Optional.of(activeClient));
+        when(passwordEncoder.matches(RAW_SECRET, HASHED_SECRET)).thenReturn(true);
+
+        authenticationService.authenticate(CLIENT_ID, RAW_SECRET);
+
+        assertThat(listAppender.list).hasSize(1);
+        String logMessage = listAppender.list.get(0).getFormattedMessage();
+        assertThat(logMessage).doesNotContain(RAW_SECRET);
+        assertThat(logMessage).doesNotContain(HASHED_SECRET);
     }
 }
