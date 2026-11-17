@@ -1,0 +1,32 @@
+pipeline:
+  id: ci_tests_pr_main_git
+  name: CI Tests PR Main Git
+  description: Runs the Maven unit tests for payment-api-v1 on pull requests targeting main, stored in Git.
+  tags:
+    ai_generated: ""
+  inputs:
+    pr_number:
+      type: string
+      required: true
+      description: Pull request number to check out
+  clone:
+    enabled: true
+    connector: connector_Github_50eb
+    repo: ricardorueda/payment-api-v1
+    ref:
+      type: pull-request
+      number: ${{ inputs.pr_number }}
+  stages:
+    - id: test
+      name: Test
+      runtime: cloud
+      platform:
+        os: linux
+        arch: amd64
+      steps:
+        - id: unit_tests
+          name: Unit Tests
+          run-test:
+            container:
+              image: maven:3-eclipse-temurin-17
+            script: mvn -B test
