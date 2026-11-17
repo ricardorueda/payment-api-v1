@@ -1,0 +1,8 @@
+environment:
+  name: environment_env_ba3d
+  identifier: environment_env_ba3d
+  description: ""
+  tags: {}
+  type: PreProduction
+  orgIdentifier: default
+  projectIdentifier: proj_x
